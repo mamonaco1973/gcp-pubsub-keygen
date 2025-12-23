@@ -21,3 +21,13 @@ gcloud services enable firestore.googleapis.com
 gcloud services enable cloudresourcemanager.googleapis.com
 gcloud services enable storage.googleapis.com
 gcloud services enable secretmanager.googleapis.com
+
+# ------------------------------------------------------------------------------
+# Required for Cloud Functions (2nd gen) + Pub/Sub triggers
+# ------------------------------------------------------------------------------
+
+gcloud services enable pubsub.googleapis.com
+gcloud services enable cloudfunctions.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable eventarc.googleapis.com
+gcloud services enable cloudbuild.googleapis.com
