@@ -31,3 +31,9 @@ terraform init
 terraform apply -auto-approve
 cd ..
 
+# Phase 3 of the build - Test web application
+
+cd 03-webapp
+terraform init
+terraform apply -auto-approve
+cd ..
