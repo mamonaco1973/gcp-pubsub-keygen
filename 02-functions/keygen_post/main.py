@@ -11,7 +11,7 @@ from flask import Request, jsonify
 # ==============================================================================
 
 
-def keygen_submit(request: Request):
+def keygen_post(request: Request):
     body = request.get_json(silent=True) or {}
 
     request_id = str(uuid.uuid4())
