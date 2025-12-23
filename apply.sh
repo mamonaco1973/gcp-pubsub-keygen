@@ -24,3 +24,10 @@ fi
 
 # Return to the previous (parent) directory.
 cd ..
+
+# Phase 2 of the build - Build functions
+cd 02-functions
+terraform init
+terraform apply -auto-approve
+cd ..
+
