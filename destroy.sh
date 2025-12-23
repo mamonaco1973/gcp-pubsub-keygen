@@ -1,14 +1,7 @@
 
 #!/bin/bash
 
-cd 02-servers
-
-terraform init
-terraform destroy -auto-approve
-
-cd ..
-
-cd 01-directory
+cd 01-pubsub 
 
 terraform init
 terraform destroy -auto-approve

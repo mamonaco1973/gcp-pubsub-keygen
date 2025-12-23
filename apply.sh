@@ -8,8 +8,8 @@ if [ $? -ne 0 ]; then
   exit 1  # Stop script execution immediately if environment check fails.
 fi
 
-# Phase 1 of the build - Build active directory
-cd 01-directory
+# Phase 1 of the build - Build pubsub infrastructure
+cd 01-pubsub
 
 # Initialize Terraform (download providers, set up backend, etc.).
 terraform init
@@ -23,16 +23,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # Return to the previous (parent) directory.
-cd ..
-
-# Phase 2 of the build - Build VMs connected to active directory
-cd 02-servers
-
-# Initialize Terraform (download providers, set up backend, etc.) for server deployment.
-terraform init
-
-# Apply the Terraform configuration, automatically approving all changes (no manual confirmation required).
-terraform apply -auto-approve
-
-# Return to the parent directory once server provisioning is complete.
 cd ..
