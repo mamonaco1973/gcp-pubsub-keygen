@@ -20,7 +20,7 @@
 set -u
 
 # ------------------------------------------------------------------------------
-# Phase 3: Destroy web application resources
+# Phase 1: Destroy web application resources
 # ------------------------------------------------------------------------------
 cd 03-webapp
 
@@ -40,7 +40,7 @@ terraform destroy -auto-approve
 cd ..
 
 # ------------------------------------------------------------------------------
-# Phase 1: Destroy Pub/Sub infrastructure
+# Phase 3: Destroy Pub/Sub infrastructure
 # ------------------------------------------------------------------------------
 cd 01-pubsub
 
