@@ -199,7 +199,7 @@ resource "google_cloudfunctions2_function" "worker" {
 # ------------------------------------------------------------------------------
 
 resource "google_cloudfunctions2_function" "post" {
-  name     = "keygen-post"
+  name     = "keygen"
   location = "us-central1"
 
   build_config {
@@ -228,7 +228,7 @@ resource "google_cloudfunctions2_function" "post" {
 # ------------------------------------------------------------------------------
 
 resource "google_cloudfunctions2_function" "get" {
-  name     = "keygen-get"
+  name     = "results"
   location = "us-central1"
 
   build_config {
