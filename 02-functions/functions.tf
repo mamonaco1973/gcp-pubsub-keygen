@@ -233,7 +233,7 @@ resource "google_cloudfunctions2_function" "post" {
 # ------------------------------------------------------------------------------
 
 resource "google_cloudfunctions2_function" "get" {
-  name     = "results"
+  name     = "result"
   location = "us-central1"
 
   build_config {
