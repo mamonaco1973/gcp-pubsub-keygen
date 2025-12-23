@@ -67,8 +67,8 @@ def keygen_worker(event, context):
         )
 
         public_bytes = public_key.public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            encoding=serialization.Encoding.OpenSSH,
+            format=serialization.PublicFormat.OpenSSH,
         )
 
         # ----------------------------------------------------------------------
