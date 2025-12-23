@@ -40,7 +40,7 @@ cd 03-webapp
 project_id=$(jq -r '.project_id' "../credentials.json")
 URL="https://us-central1-${project_id}.cloudfunctions.net"
 export API_BASE="${URL}"
-echo "NOTE: Function App API URL: ${API_BASE}"
+echo "NOTE: API Base URL: ${API_BASE}"
 
 envsubst '${API_BASE}' < index.html.tmpl > index.html || {
   echo "ERROR: Failed to generate index.html. Exiting."
