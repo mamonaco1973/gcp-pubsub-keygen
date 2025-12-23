@@ -33,7 +33,20 @@ cd ..
 
 # Phase 3 of the build - Test web application
 
+
 cd 03-webapp
+
+# Extract the project_id using jq
+project_id=$(jq -r '.project_id' "../credentials.json")
+URL="https://us-central1-${project_id}.cloudfunctions.net"
+export API_BASE="${URL}"
+echo "NOTE: Function App API URL: ${API_BASE}"
+
+envsubst '${API_BASE}' < index.html.tmpl > index.html || {
+  echo "ERROR: Failed to generate index.html. Exiting."
+  exit 1
+}
+
 terraform init
 terraform apply -auto-approve
 cd ..

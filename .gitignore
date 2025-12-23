@@ -6,4 +6,5 @@
 *.pem
 credentials.json
 *.zip
+index.html
 
