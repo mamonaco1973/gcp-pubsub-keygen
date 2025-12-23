@@ -216,6 +216,10 @@ resource "google_cloudfunctions2_function" "post" {
 
   service_config {
     service_account_email = google_service_account.http_sa.email
+
+    environment_variables = {
+      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
+    }
   }
 }
 
