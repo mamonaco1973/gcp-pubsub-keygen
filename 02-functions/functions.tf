@@ -249,6 +249,27 @@ resource "google_cloudfunctions2_function" "get" {
 }
 
 # ------------------------------------------------------------------------------
+# Public access to HTTP functions (unauthenticated invoke)
+# ------------------------------------------------------------------------------
+resource "google_cloudfunctions2_function_iam_member" "post_public" {
+  project        = google_cloudfunctions2_function.post.project
+  location       = google_cloudfunctions2_function.post.location
+  cloud_function = google_cloudfunctions2_function.post.name
+
+  role   = "roles/cloudfunctions.invoker"
+  member = "allUsers"
+}
+
+resource "google_cloudfunctions2_function_iam_member" "get_public" {
+  project        = google_cloudfunctions2_function.get.project
+  location       = google_cloudfunctions2_function.get.location
+  cloud_function = google_cloudfunctions2_function.get.name
+
+  role   = "roles/cloudfunctions.invoker"
+  member = "allUsers"
+}
+
+# ------------------------------------------------------------------------------
 # Primary Pub/Sub topic for inbound key generation requests
 # ------------------------------------------------------------------------------
 # Existing Pub/Sub topic that acts as the request queue.
