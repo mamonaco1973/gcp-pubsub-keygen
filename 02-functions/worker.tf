@@ -52,11 +52,13 @@ resource "google_service_account" "worker_sa" {
 # IAM permissions for worker
 # ------------------------------------------------------------------------------
 resource "google_project_iam_member" "worker_pubsub" {
+  project = local.credentials.project_id
   role   = "roles/pubsub.subscriber"
   member = "serviceAccount:${google_service_account.worker_sa.email}"
 }
 
 resource "google_project_iam_member" "worker_firestore" {
+  project = local.credentials.project_id
   role   = "roles/datastore.user"
   member = "serviceAccount:${google_service_account.worker_sa.email}"
 }
