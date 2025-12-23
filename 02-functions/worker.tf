@@ -7,8 +7,8 @@
 # ------------------------------------------------------------------------------
 data "archive_file" "worker_zip" {
   type        = "zip"
-  source_dir  = "./worker_keygen"
-  output_path = "./worker_keygen/worker_keygen.zip"
+  source_dir  = "./keygen_worker"
+  output_path = "./keygen_work/keygen_worker.zip"
 }
 
 # ------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ resource "google_storage_bucket" "functions_src" {
 # Upload worker source archive
 # ------------------------------------------------------------------------------
 resource "google_storage_bucket_object" "worker_object" {
-  name   = "worker_keygen.zip"
+  name   = "keygen_worker.zip"
   bucket = google_storage_bucket.functions_src.name
   source = data.archive_file.worker_zip.output_path
 }
