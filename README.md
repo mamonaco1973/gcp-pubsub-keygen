@@ -168,3 +168,81 @@ flowchart TD
 * [Install Terraform](https://developer.hashicorp.com/terraform/install)
 
 If this is your first time watching our content, we recommend starting with this video: [GCP + Terraform: Easy Setup](https://youtu.be/3spJpYX4f7I). It provides a step-by-step guide to properly configure Terraform, Packer, and the gcloud CLI.
+
+## Download this Repository
+
+```bash
+git clone https://github.com/mamonaco1973/gcp-pubsub-keygen.git
+cd gcp-pubsub-keygen
+```
+
+## Build the Code
+
+Run [check_env](check_env.sh) to validate your environment, then run [apply](apply.sh) to provision the infrastructure.
+
+```bash
+azureuser@develop-vm:~/gcp-pubsub-keygen$ ./apply.sh
+NOTE: Validating that required commands are found in the PATH.
+NOTE: gcloud is found in the current PATH.
+NOTE: terraform is found in the current PATH.
+NOTE: All required commands are available.
+NOTE: Validating credentials.json and test the gcloud command
+Activated service account credentials for: [terraform-build@debug-project-446221.iam.gserviceaccount.com]
+Initializing the backend...
+Initializing provider plugins...
+- Reusing previous version of hashicorp/google from the dependency lock file
+- Using previously-installed hashicorp/google v7.14.1
+
+Terraform has been successfully initialized!
+```
+
+### Build Results
+
+When the deployment completes, the following resources are created:
+
+- **Core Infrastructure:**  
+  - Fully serverless architecture—no virtual machines or long-running compute required  
+  - Terraform-managed provisioning of Cloud Functions, Pub/Sub, Firestore, Cloud Storage, and logging resources  
+  - Event-driven message pipeline enabling asynchronous SSH key generation and result retrieval  
+
+- **Identity & Security:**  
+  - Dedicated Google Cloud service accounts with least-privilege IAM roles  
+  - Secure access from Cloud Functions to Pub/Sub and Firestore without embedded secrets  
+  - Encryption-at-rest enabled by default using Google-managed keys  
+  - SSH keys generated entirely in memory with no local file persistence  
+
+- **Google Cloud Pub/Sub:**  
+  - Dedicated request **topic** for inbound SSH key generation jobs  
+  - **Subscription** bound to a Pub/Sub–triggered Cloud Function for background key processing  
+  - Decouples HTTP request submission from asynchronous worker execution  
+  - Provides durable messaging, retry handling, and back-pressure for worker Functions  
+
+- **Cloud Firestore:**  
+  - Central results collection keyed by unique `request_id`  
+  - Stores request status, key metadata, and base64-encoded keypair output  
+  - Configured with Time-to-Live (TTL) for automatic expiration and cost control  
+
+- **Cloud Functions (Python):**  
+  - HTTP-triggered Functions for submitting requests and retrieving results  
+  - Pub/Sub–triggered worker Function for asynchronous SSH key generation  
+  - Supports RSA-2048, RSA-4096, and Ed25519 key types via request payload  
+  - Emits structured logs and metrics to Google Cloud Logging and Monitoring  
+
+- **HTTP API Layer:**  
+  - HTTPS endpoints exposed directly via Cloud Functions (`/keygen`, `/result/{request_id}`)  
+  - Stateless request handling suitable for browser clients and CLI integrations  
+  - JSON-based request/response model aligned with REST-style workflows  
+
+- **Static Web Application (Cloud Storage):**  
+  - Public Cloud Storage bucket configured for static website hosting  
+  - `index.html` frontend allows users to submit key requests and poll for results  
+  - Dynamically calls Cloud Function endpoints published as Terraform outputs  
+
+- **Automation & Validation:**  
+  - `apply.sh`, `destroy.sh`, and `check_env.sh` scripts automate provisioning, teardown, and environment validation  
+  - Terraform enforces consistent, repeatable deployments across environments  
+  - Entire workflow runs using gcloud authentication, Terraform, and Python—no manual setup required  
+
+Together, these resources form a **serverless, event-driven SSH KeyGen pipeline**
+on Google Cloud Platform, demonstrating cloud-native design principles with
+automatic scaling, strong security boundaries, and minimal operational overhead.
