@@ -77,5 +77,5 @@ resource "google_storage_bucket_object" "index" {
 # ------------------------------------------------------------------------------
 output "index_page_url" {
   description = "Direct URL to index.html"
-  value       = "http://${google_storage_bucket.static_site.name}.storage.googleapis.com/index.html"
+  value       = "https://${google_storage_bucket.static_site.name}.storage.googleapis.com/index.html"
 }

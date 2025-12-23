@@ -219,6 +219,7 @@ resource "google_cloudfunctions2_function" "post" {
 
     environment_variables = {
       GOOGLE_CLOUD_PROJECT = local.credentials.project_id
+      CORS_ALLOW_ORIGIN = "*"
     }
   }
 }
@@ -249,6 +250,11 @@ resource "google_cloudfunctions2_function" "get" {
 
   service_config {
     service_account_email = google_service_account.http_sa.email
+    
+    environment_variables = {
+      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
+      CORS_ALLOW_ORIGIN = "*"
+    }
   }
 }
 

@@ -10,7 +10,24 @@ from google.cloud import firestore, pubsub_v1
 # HTTP API to submit SSH key generation requests
 # ==============================================================================
 
+def _cors_headers():
+    origin = os.environ.get("CORS_ALLOW_ORIGIN", "*")
+
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Max-Age": "3600",
+    }
+
+
 def keygen_post(request):
+    # --------------------------------------------------------------------------
+    # Handle CORS preflight request
+    # --------------------------------------------------------------------------
+    if request.method == "OPTIONS":
+        return ("", 204, _cors_headers())
+
     body = request.get_json(silent=True) or {}
 
     request_id = str(uuid.uuid4())
@@ -53,11 +70,16 @@ def keygen_post(request):
         }).encode("utf-8"),
     )
 
+    headers = {
+        "Content-Type": "application/json",
+        **_cors_headers(),
+    }
+
     return (
         json.dumps({
             "request_id": request_id,
             "status": "submitted",
         }),
         200,
-        {"Content-Type": "application/json"},
+        headers,
     )
