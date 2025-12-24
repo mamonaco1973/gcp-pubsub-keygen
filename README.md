@@ -1,4 +1,4 @@
-# GCP SSH KeyGen Microservice
+# Google Cloud SSH KeyGen Microservice
 
 This project delivers a fully automated **serverless SSH key generation service**
 on **Google Cloud Platform (GCP)**, built using **Pub/Sub**, **Cloud Functions
