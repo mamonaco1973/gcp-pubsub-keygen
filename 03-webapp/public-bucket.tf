@@ -1,21 +1,13 @@
 # ==============================================================================
-# Static Website Cloud Storage Bucket (Public) - Google Cloud
-# ==============================================================================
-# Creates:
-#   - Globally-unique GCS bucket (random suffix)
-#   - Static website configuration (index + 404)
-#   - Public read access (allUsers -> objectViewer)
-#   - Uploads ./index.html
-#
-# Notes:
-#   - index.html must exist in the Terraform root directory
-#   - GCS website endpoint is HTTP-only:
-#       http://<bucket>.storage.googleapis.com/
-#   - HTTPS requires an external HTTP(S) Load Balancer
+# GCS: STATIC WEBSITE (PUBLIC)
+# ------------------------------------------------------------------------------
+# Creates a public static website bucket with random suffix.
+# Uploads index.html and enables website hosting.
+# HTTP only. HTTPS requires external load balancer.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Random suffix (global uniqueness requirement)
+# Random suffix for global bucket name uniqueness
 # ------------------------------------------------------------------------------
 resource "random_string" "static_suffix" {
   length  = 8
@@ -26,15 +18,16 @@ resource "random_string" "static_suffix" {
 }
 
 # ------------------------------------------------------------------------------
-# Locals
+# LOCALS
 # ------------------------------------------------------------------------------
 locals {
-  # GCS bucket names must be globally unique and lowercase.
+
+  # GCS bucket names must be globally unique and lowercase
   static_site_name = "keygen-${random_string.static_suffix.result}"
 }
 
 # ------------------------------------------------------------------------------
-# Storage bucket
+# Storage bucket configuration
 # ------------------------------------------------------------------------------
 resource "google_storage_bucket" "static_site" {
   name          = local.static_site_name
@@ -43,6 +36,9 @@ resource "google_storage_bucket" "static_site" {
 
   uniform_bucket_level_access = true
 
+  # ---------------------------------------------------------------------------
+  # Website configuration (index and 404 pages)
+  # ---------------------------------------------------------------------------
   website {
     main_page_suffix = "index.html"
     not_found_page   = "404.html"
@@ -54,7 +50,7 @@ resource "google_storage_bucket" "static_site" {
 }
 
 # ------------------------------------------------------------------------------
-# Public read access
+# Public read access (allUsers objectViewer)
 # ------------------------------------------------------------------------------
 resource "google_storage_bucket_iam_member" "public_read" {
   bucket = google_storage_bucket.static_site.name
@@ -63,7 +59,7 @@ resource "google_storage_bucket_iam_member" "public_read" {
 }
 
 # ------------------------------------------------------------------------------
-# Upload index.html
+# Upload index.html from Terraform root
 # ------------------------------------------------------------------------------
 resource "google_storage_bucket_object" "index" {
   name         = "index.html"
@@ -73,7 +69,17 @@ resource "google_storage_bucket_object" "index" {
 }
 
 # ------------------------------------------------------------------------------
-# Outputs
+# Upload favicon from Terraform root
+# ------------------------------------------------------------------------------
+resource "google_storage_bucket_object" "favicon" {
+  name         = "favicon.ico"
+  bucket       = google_storage_bucket.static_site.name
+  source       = "${path.root}/favicon.ico"
+  content_type = "image/x-icon"
+}
+
+# ------------------------------------------------------------------------------
+# OUTPUTS
 # ------------------------------------------------------------------------------
 output "index_page_url" {
   description = "Direct URL to index.html"

@@ -1,15 +1,21 @@
-# Google Cloud Provider Configuration
-# Configures the Google Cloud provider using project details and credentials from a JSON file.
+# ==============================================================================
+# PROVIDER: GOOGLE CLOUD
+# ------------------------------------------------------------------------------
+# Configures the Google provider using project ID and a JSON credentials file.
+# ==============================================================================
+
 provider "google" {
-  project     = local.credentials.project_id # Specifies the project ID extracted from the decoded credentials file.
-  credentials = file("../credentials.json")  # Path to the credentials JSON file for Google Cloud authentication.
+  project     = local.credentials.project_id
+  credentials = file("../credentials.json")
 }
 
-# Local Variables
-# Reads and decodes the credentials JSON file to extract useful details like project ID and service account email.
+# ==============================================================================
+# LOCALS: CREDENTIALS
+# ------------------------------------------------------------------------------
+# Decodes the JSON credentials file for reuse (project_id, client_email).
+# ==============================================================================
+
 locals {
-  credentials           = jsondecode(file("../credentials.json")) # Decodes the JSON file into a map for easier access.
-  service_account_email = local.credentials.client_email          # Extracts the service account email from the decoded JSON map.
+  credentials           = jsondecode(file("../credentials.json"))
+  service_account_email = local.credentials.client_email
 }
-
-

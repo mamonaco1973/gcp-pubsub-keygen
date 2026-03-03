@@ -1,15 +1,37 @@
-# Google Cloud Provider Configuration
-# Configures the Google Cloud provider using project details and credentials from a JSON file.
+# ==============================================================================
+# PROVIDER: GOOGLE CLOUD
+# ------------------------------------------------------------------------------
+# Configures the Google provider using project ID and JSON credentials.
+# ==============================================================================
+
 provider "google" {
-  project     = local.credentials.project_id # Specifies the project ID extracted from the decoded credentials file.
-  credentials = file("../credentials.json")  # Path to the credentials JSON file for Google Cloud authentication.
+
+  # ----------------------------------------------------------------------------
+  # Project ID extracted from decoded credentials
+  # ----------------------------------------------------------------------------
+  project = local.credentials.project_id
+
+  # ----------------------------------------------------------------------------
+  # Path to service account JSON credentials file
+  # ----------------------------------------------------------------------------
+  credentials = file("../credentials.json")
 }
 
-# Local Variables
-# Reads and decodes the credentials JSON file to extract useful details like project ID and service account email.
+# ==============================================================================
+# LOCALS: CREDENTIAL PARSING
+# ------------------------------------------------------------------------------
+# Decodes credentials JSON and exposes reusable values.
+# ==============================================================================
+
 locals {
-  credentials           = jsondecode(file("../credentials.json")) # Decodes the JSON file into a map for easier access.
-  service_account_email = local.credentials.client_email          # Extracts the service account email from the decoded JSON map.
+
+  # ----------------------------------------------------------------------------
+  # Decode credentials JSON into Terraform map
+  # ----------------------------------------------------------------------------
+  credentials = jsondecode(file("../credentials.json"))
+
+  # ----------------------------------------------------------------------------
+  # Extract service account email from decoded map
+  # ----------------------------------------------------------------------------
+  service_account_email = local.credentials.client_email
 }
-
-

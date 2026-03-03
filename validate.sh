@@ -25,6 +25,7 @@
 #   - If your Functions require auth (recommended), you must provide an
 #     Authorization header (e.g., identity token) and allow the caller via IAM.
 # ==============================================================================
+
 set -euo pipefail
 
 # ------------------------------------------------------------------------------
@@ -65,7 +66,7 @@ REQ_PAYLOAD="$(jq -n --arg kt "${KEY_TYPE}" --arg kb "${KEY_BITS}" \
 
 echo "NOTE: Sending request - key_type=${KEY_TYPE}, key_bits=${KEY_BITS}"
 
-RESPONSE="$(curl -s -X POST "${API_BASE}/keygen" \
+RESPONSE="$(curl -sS -X POST "${API_BASE}/keygen" \
   -H "Content-Type: application/json" \
   -d "${REQ_PAYLOAD}")"
 
@@ -87,13 +88,12 @@ MAX_ATTEMPTS=30
 SLEEP_SECONDS=2
 
 for ((i=1; i<=MAX_ATTEMPTS; i++)); do
-  RESULT="$(curl -s "${API_BASE}/result/${REQUEST_ID}")"
+  RESULT="$(curl -sS "${API_BASE}/result/${REQUEST_ID}")"
   STATUS="$(echo "${RESULT}" | jq -r '.status // empty')"
 
   if [ "${STATUS}" = "complete" ]; then
     echo "NOTE: Key generation complete."
-    # echo "${RESULT}" | jq
-    exit 0
+    break
   fi
 
   if [ "${STATUS}" = "error" ]; then
@@ -102,9 +102,35 @@ for ((i=1; i<=MAX_ATTEMPTS; i++)); do
     exit 1
   fi
 
-  echo "WARNING: Attempt ${i}/${MAX_ATTEMPTS}: pending..."
+  echo "NOTE: Attempt ${i}/${MAX_ATTEMPTS}: pending..."
   sleep "${SLEEP_SECONDS}"
+
+  if [ "${i}" -eq "${MAX_ATTEMPTS}" ]; then
+    echo "ERROR: Key generation did not complete."
+    exit 1
+  fi
 done
 
-echo "ERROR: Key generation did not complete after ${MAX_ATTEMPTS} attempts."
-exit 1
+# ------------------------------------------------------------------------------
+# Final Quick Start Output
+# ------------------------------------------------------------------------------
+echo ""
+echo "============================================================================"
+echo "GCP Pub/Sub Quick Start - Validation Output"
+echo "============================================================================"
+echo ""
+
+if [ -n "${INDEX_PAGE_URL}" ] && [ "${INDEX_PAGE_URL}" != "None" ]; then
+  echo "NOTE: Test Web URL:    ${INDEX_PAGE_URL}"
+else
+  echo "WARN: Static website URL not found"
+fi
+
+if [ -n "${API_BASE}" ] && [ "${API_BASE}" != "None" ]; then
+  echo "NOTE: API Base URI:    ${API_BASE}"
+else
+  echo "WARN: Cloud Functions endpoint not found"
+fi
+
+echo ""
+echo "NOTE: Validation complete."
