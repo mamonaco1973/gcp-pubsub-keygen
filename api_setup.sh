@@ -18,7 +18,7 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 # Step 0: Validate credentials.json exists
 # ------------------------------------------------------------------------------
-echo "NOTE: Validating credentials.json and testing gcloud authentication"
+#echo "NOTE: Validating credentials.json and testing gcloud authentication"
 
 if [[ ! -f "./credentials.json" ]]; then
   echo "ERROR: The file './credentials.json' does not exist." >&2
@@ -46,7 +46,7 @@ gcloud config set project "${project_id}"
 # ------------------------------------------------------------------------------
 # Step 3: Enable core infrastructure APIs
 # ------------------------------------------------------------------------------
-echo "NOTE: Enabling required Google Cloud APIs..."
+#echo "NOTE: Enabling required Google Cloud APIs..."
 
 gcloud services enable compute.googleapis.com
 gcloud services enable firestore.googleapis.com
