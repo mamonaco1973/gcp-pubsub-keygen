@@ -61,5 +61,3 @@ gcloud auth activate-service-account \
 export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/credentials.json"
 
 ./api_setup.sh
-
-echo "NOTE: Authentication and environment validation complete."
