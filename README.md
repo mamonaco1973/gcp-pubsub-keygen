@@ -1,248 +1,150 @@
-# Google Cloud SSH KeyGen Microservice
+# SSH Key Generator on GCP: Cloud Functions, Pub/Sub and Firestore
 
-This project delivers a fully automated **serverless SSH key generation service**
-on **Google Cloud Platform (GCP)**, built using **Pub/Sub**, **Cloud Functions
-(Python)**, **Cloud Firestore**, and **HTTP-triggered Cloud Function endpoints**.
+An asynchronous **SSH key pair generator** with a browser front end. A
+client submits a request to an HTTP **Cloud Function**, which records it in
+**Firestore**, publishes it to a **Pub/Sub** topic and returns an ID. An
+event-triggered worker function generates the key pair and writes it back
+to the same Firestore document, and the client polls a second HTTP function
+until the result is ready. A single-page web app, served from a public
+**Cloud Storage** bucket, does this from the browser.
 
-It uses **Terraform** and **Python (google-cloud SDKs + cryptography)** to
-implement a **message-driven, asynchronous key generation pipeline** that
-processes SSH keypair requests without requiring any virtual machines or
-long-running infrastructure.
+![KeyGen web app](webapp.png)
 
-Requests are submitted via an HTTP API, queued through Pub/Sub, processed by a
-background Cloud Function, and written to Firestore for retrieval using a unique
-`request_id`.
+| Piece | Where | Role |
+|---|---|---|
+| **keygen** | Cloud Functions, `us-central1` | 2nd gen, Python 3.11; public (`allUsers` invoker); writes a `submitted` document and publishes the request; CORS allows any origin |
+| **result** | Cloud Functions, `us-central1` | 2nd gen, Python 3.11; public; returns the document, or `404` `not_found` |
+| **keygen-worker** | Cloud Functions, `us-central1` | 2nd gen, Python 3.11, 256 MB, 60 s; Eventarc trigger on the topic with retries enabled |
+| **keygen-requests** | Pub/Sub | the request topic |
+| **keygen-requests-sub** / **keygen-requests-dlq** | Pub/Sub | a pull subscription (30 s ack deadline, 5 delivery attempts) and its dead-letter topic; nothing consumes them |
+| **keygen_results** | Firestore | one document per request, deleted by a TTL policy on `expireAt` (an hour after it's written) |
+| **keygen-http-sa** / **keygen-worker-sa** | IAM | the HTTP functions get `datastore.user` and `pubsub.publisher`; the worker gets `datastore.user` and `pubsub.subscriber`, all project-wide |
+| **keygen-&lt;suffix&gt;** | Cloud Storage, `US` | two buckets: the functions' source zips, and the public-read web bucket with `index.html` and `favicon.ico` |
 
-For testing this service, a simple HTML frontend lets users trigger key
-generation requests directly from a browser using the deployed API endpoints.
+## Architecture
 
-![webapp](webapp.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="architecture-dark.svg">
+  <img alt="A browser loads index.html from the public keygen Cloud Storage bucket. POST to the public keygen function writes a submitted document to the keygen_results Firestore collection and publishes the request to the keygen-requests Pub/Sub topic. An Eventarc trigger pushes it to keygen-worker, which marks the document pending, generates the key pair and marks it complete. GET to the public result function reads the document back. A separate pull subscription with a dead-letter topic also receives every message, but nothing reads it. Documents expire through a Firestore TTL on expireAt." src="architecture-light.svg">
+</picture>
 
-This design follows a **stateless, event-driven microservice architecture**:
-Functions scale automatically on demand, keys are generated entirely in memory,
-and results expire automatically—ensuring low cost, strong isolation, and
-minimal operational overhead.
+Regenerate with `python3 make_diagram.py`.
 
-Key capabilities demonstrated:
+- **`01-pubsub/`**: the topic, the pull subscription and the dead-letter
+  topic.
+- **`02-functions/`**: `functions.tf` (source bucket, both service
+  accounts and their roles, the three functions, the public invoker
+  bindings) and one folder of code per function.
+- **`03-webapp/`**: the web bucket, and `index.html.tmpl`, which `apply.sh`
+  fills in with the API URL.
 
-1. **Serverless Key Generation Pipeline** – Fully event-driven workflow using
-   Pub/Sub, Cloud Functions, and Firestore.
-2. **Asynchronous Processing Model** – Clients submit jobs via HTTP and poll for
-   results using a correlation ID.
-3. **Secure Key Handling** – SSH keypairs are generated in memory only and stored
-   temporarily in Firestore, base64-encoded for safe transport.
-4. **Infrastructure as Code (IaC)** – Terraform provisions Pub/Sub topics,
-   Cloud Functions, Firestore, IAM roles, and supporting resources.
-5. **Optional Static Web Client** – A lightweight HTML frontend hosted on Google
-   Cloud Storage enables browser-based testing of the API endpoints.
+## API
 
-Together, these components form a **cloud-native, serverless DevOps utility**
-suitable for CI/CD pipelines, ephemeral environments, demos, or short-lived
-development workflows.
+The base URL is `https://us-central1-<project>.cloudfunctions.net`. There's
+no authentication.
 
-![GCP KeyGen Diagram](gcp-pubsub.png)
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/keygen` | `{"key_type": "rsa" \| "ed25519", "key_bits": 2048 \| 4096}`, both optional | `200` `{"request_id": "<uuid>", "status": "submitted"}` |
+| GET | `/result/{id}` | none | `200` with the document; `404` `{"status": "not_found"}` if there isn't one |
 
-## HTTP API Endpoints
+The document's `status` moves from `submitted` (written by `keygen`) to
+`pending` (when the worker starts) to `complete` or `error`. When complete:
 
-The **KeyGen API** exposes two HTTP endpoints through **Google Cloud Functions
-(HTTP-triggered)**, providing a simple request/response workflow for asynchronous
-SSH key generation.  
-All endpoints return structured JSON and are designed to integrate seamlessly
-with both CLI tools and browser-based clients.
-
-Internally, requests are published to **Google Cloud Pub/Sub**, processed by a
-background worker Cloud Function, and persisted temporarily in **Cloud
-Firestore**.
-
-### POST /keygen
-
-**Purpose:**  
-Submits a new SSH key generation request to the service.  
-The request is published to a Pub/Sub topic and processed asynchronously by a
-Pub/Sub-triggered Cloud Function.
-
-**Request Body (JSON):**
-```json
-{
-  "key_type": "rsa",
-  "key_bits": 2048
-}
-```
-
-**Parameters:**
-| Field | Type | Required | Description |
-|-------|------|-----------|-------------|
-| `key_type` | string | No | Type of key to generate (`rsa` or `ed25519`). Defaults to `rsa`. |
-| `key_bits` | integer | No | RSA key size (`2048` or `4096`). Ignored for Ed25519 keys. |
-
-**Example Request:**
-```bash
-curl -X POST https://<cloud-function-url>/keygen \
-  -H "Content-Type: application/json" \
-  -d '{"key_type": "rsa", "key_bits": 2048}'
-```
-
-**Example Response:**
-```json
-{
-  "request_id": "630f70c4-815c-41d1-ae52-6babf3a41b1f",
-  "status": "submitted"
-}
-```
-
-**Behavior:**
-- The API immediately returns a unique `request_id` for correlation.  
-- The actual key generation occurs asynchronously in a Pub/Sub-triggered worker.  
-- Clients must poll the `/result/{request_id}` endpoint to retrieve results.
-
-### GET /result/{request_id}
-
-**Purpose:**  
-Retrieves the result of a previously submitted SSH key generation request.
-
-**Path Parameters:**
-| Parameter | Type | Description |
-|------------|------|-------------|
-| `request_id` | string | Unique ID returned by the `/keygen` call. |
-
-**Example Request:**
-```bash
-curl https://<cloud-function-url>/result/630f70c4-815c-41d1-ae52-6babf3a41b1f
-```
-
-**Example Response (Pending):**
-```json
-{
-  "request_id": "630f70c4-815c-41d1-ae52-6babf3a41b1f",
-  "status": "pending"
-}
-```
-
-**Example Response (Completed):**
 ```json
 {
   "request_id": "630f70c4-815c-41d1-ae52-6babf3a41b1f",
   "status": "complete",
   "key_type": "rsa",
   "key_bits": 2048,
-  "public_key_b64": "LS0tLS1CRUdJTiBSU0EgUFVCTElDIEtFWS0tLS0t...",
-  "private_key_b64": "LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQo..."
+  "public_key_b64": "c3NoLXJzYSBBQUFBQjNOemFDMXljMkVBQUFBREFRQUJBQUFCQVFD...",
+  "private_key_b64": "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJn...",
+  "createdAt": "...",
+  "completedAt": "...",
+  "expireAt": "..."
 }
 ```
 
-**Status Values:**
-| Status | Description |
-|---------|--------------|
-| `submitted` | Request accepted and published to Pub/Sub. |
-| `pending` | Request is being processed by the worker function. |
-| `complete` | Key generation successful; keypair included in response. |
-| `error` | Request failed; additional error message provided. |
-
----
-
-**Notes:**
-- Responses are served by Cloud Functions backed by Firestore lookups.  
-- SSH keys are generated entirely in memory and stored temporarily,
-  base64-encoded.  
-- Firestore TTL automatically expires results, ensuring security and cost
-  control.
-
-### Architecture Flow
-
-```mermaid
-flowchart TD
-    A["User or Web Client"] -->|"HTTPS POST /keygen"| B["Cloud Functions (HTTP Trigger)"]
-    B -->|"Publish request"| C["Pub/Sub Topic"]
-    C -->|"Trigger worker"| D["Cloud Functions (Pub/Sub Trigger)"]
-    D -->|"Generate SSH keypair"| E["Firestore Results Collection"]
-
-    A -->|"HTTPS GET /result/{request_id}"| F["Cloud Functions (HTTP Trigger)"]
-    F -->|"Read by request_id"| E
-    F -->|"Return JSON response"| A
-```
+Both keys are base64-encoded. Decoded, the public key is in OpenSSH format
+and the private key is an unencrypted PKCS#8 PEM. Any `key_type` other than
+`ed25519` produces RSA. If generation fails, the worker records
+`status: error` with an `error_message`; because it catches the exception,
+Pub/Sub doesn't retry it.
 
 ## Prerequisites
 
 * [A Google Cloud Account](https://console.cloud.google.com/)
-* [Install gcloud CLI](https://cloud.google.com/sdk/docs/install) 
+* [Install gcloud CLI](https://cloud.google.com/sdk/docs/install)
 * [Install Terraform](https://developer.hashicorp.com/terraform/install)
+* [Install jq](https://jqlang.github.io/jq/download/) and `envsubst`
+* A Firestore database in native mode, `(default)`, in the project; nothing
+  here creates one
 
-If this is your first time watching our content, we recommend starting with this video: [GCP + Terraform: Easy Setup](https://youtu.be/3spJpYX4f7I). It provides a step-by-step guide to properly configure Terraform, Packer, and the gcloud CLI.
+Put a service account key in the repository root as `credentials.json`. If
+this is your first time following along, we recommend starting with this
+video: [GCP + Terraform: Easy Setup](https://youtu.be/3spJpYX4f7I).
 
-## Download this Repository
+## Deploy
 
 ```bash
 git clone https://github.com/mamonaco1973/gcp-pubsub-keygen.git
 cd gcp-pubsub-keygen
+./apply.sh
 ```
 
-## Build the Code
+`check_env.sh` signs in with `credentials.json` and runs `api_setup.sh`,
+which enables the APIs and turns on the Firestore TTL policy for
+`keygen_results.expireAt`. `apply.sh` then applies `01-pubsub` and
+`02-functions`, renders `03-webapp/index.html` with the API URL using
+`envsubst`, and applies `03-webapp`. It ends by running `validate.sh`, which
+submits an RSA 2048 request and polls every 2 seconds, up to 30 times, until
+it's complete (set `KEY_TYPE` and `KEY_BITS` to try others):
 
-Run [check_env](check_env.sh) to validate your environment, then run [apply](apply.sh) to provision the infrastructure.
+```
+NOTE: Submitted keygen request (630f70c4-815c-41d1-ae52-6babf3a41b1f).
+NOTE: Polling for result...
+NOTE: Attempt 1/30: pending...
+NOTE: Key generation complete.
+
+============================================================================
+GCP Pub/Sub Quick Start - Validation Output
+============================================================================
+
+NOTE: Test Web URL:    https://keygen-<suffix>.storage.googleapis.com/index.html
+NOTE: API Base URI:    https://us-central1-my-project.cloudfunctions.net
+```
+
+## Try it
+
+1. Open the **Test Web URL**, pick a key type and size, and generate a key
+   pair; the page polls for the result and shows both keys.
+2. Or call the API with `curl`:
+
+   ```bash
+   curl -s https://us-central1-<project>.cloudfunctions.net/result/<id> \
+     | jq -r .private_key_b64 | base64 -d > id_rsa && chmod 600 id_rsa
+   ```
+
+## Teardown
 
 ```bash
-azureuser@develop-vm:~/gcp-pubsub-keygen$ ./apply.sh
-NOTE: Validating that required commands are found in the PATH.
-NOTE: gcloud is found in the current PATH.
-NOTE: terraform is found in the current PATH.
-NOTE: All required commands are available.
-NOTE: Validating credentials.json and test the gcloud command
-Activated service account credentials for: [terraform-build@debug-project-446221.iam.gserviceaccount.com]
-Initializing the backend...
-Initializing provider plugins...
-- Reusing previous version of hashicorp/google from the dependency lock file
-- Using previously-installed hashicorp/google v7.14.1
-
-Terraform has been successfully initialized!
+./destroy.sh
 ```
 
-### Build Results
+Terraform doesn't manage the Firestore documents; any left behind expire
+through the TTL policy.
 
-When the deployment completes, the following resources are created:
+## Notes
 
-- **Core Infrastructure:**  
-  - Fully serverless architecture—no virtual machines or long-running compute required  
-  - Terraform-managed provisioning of Cloud Functions, Pub/Sub, Firestore, Cloud Storage, and logging resources  
-  - Event-driven message pipeline enabling asynchronous SSH key generation and result retrieval  
-
-- **Identity & Security:**  
-  - Dedicated Google Cloud service accounts with least-privilege IAM roles  
-  - Secure access from Cloud Functions to Pub/Sub and Firestore without embedded secrets  
-  - Encryption-at-rest enabled by default using Google-managed keys  
-  - SSH keys generated entirely in memory with no local file persistence  
-
-- **Google Cloud Pub/Sub:**  
-  - Dedicated request **topic** for inbound SSH key generation jobs  
-  - **Subscription** bound to a Pub/Sub–triggered Cloud Function for background key processing  
-  - Decouples HTTP request submission from asynchronous worker execution  
-  - Provides durable messaging, retry handling, and back-pressure for worker Functions  
-
-- **Cloud Firestore:**  
-  - Central results collection keyed by unique `request_id`  
-  - Stores request status, key metadata, and base64-encoded keypair output  
-  - Configured with Time-to-Live (TTL) for automatic expiration and cost control  
-
-- **Cloud Functions (Python):**  
-  - HTTP-triggered Functions for submitting requests and retrieving results  
-  - Pub/Sub–triggered worker Function for asynchronous SSH key generation  
-  - Supports RSA-2048, RSA-4096, and Ed25519 key types via request payload  
-  - Emits structured logs and metrics to Google Cloud Logging and Monitoring  
-
-- **HTTP API Layer:**  
-  - HTTPS endpoints exposed directly via Cloud Functions (`/keygen`, `/result/{request_id}`)  
-  - Stateless request handling suitable for browser clients and CLI integrations  
-  - JSON-based request/response model aligned with REST-style workflows  
-
-- **Static Web Application (Cloud Storage):**  
-  - Public Cloud Storage bucket configured for static website hosting  
-  - `index.html` frontend allows users to submit key requests and poll for results  
-  - Dynamically calls Cloud Function endpoints published as Terraform outputs  
-
-- **Automation & Validation:**  
-  - `apply.sh`, `destroy.sh`, and `check_env.sh` scripts automate provisioning, teardown, and environment validation  
-  - Terraform enforces consistent, repeatable deployments across environments  
-  - Entire workflow runs using gcloud authentication, Terraform, and Python—no manual setup required  
-
-Together, these resources form a **serverless, event-driven SSH KeyGen pipeline**
-on Google Cloud Platform, demonstrating cloud-native design principles with
-automatic scaling, strong security boundaries, and minimal operational overhead.
+- **Lab only.** The functions are public with CORS open to any origin, and
+  generated private keys stay in Firestore for up to an hour (TTL deletion
+  can lag behind `expireAt`). Anyone with a request ID can fetch its private
+  key.
+- The web page stops polling on any status other than `pending`. If the
+  worker hasn't started by the first poll (1.5 s), it sees `submitted`,
+  tries to decode keys that aren't there, and shows an error.
+- `keygen-requests-sub` and its dead-letter topic aren't used: the worker's
+  Eventarc trigger has its own subscription, so the pull subscription just
+  collects copies of every message until they expire.
+- `check_env.sh` checks only for `gcloud` and `terraform`, not `jq` or
+  `envsubst`.
