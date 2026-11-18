@@ -66,11 +66,32 @@ REQ_PAYLOAD="$(jq -n --arg kt "${KEY_TYPE}" --arg kb "${KEY_BITS}" \
 
 echo "NOTE: Sending request - key_type=${KEY_TYPE}, key_bits=${KEY_BITS}"
 
-RESPONSE="$(curl -sS -X POST "${API_BASE}/keygen" \
-  -H "Content-Type: application/json" \
-  -d "${REQ_PAYLOAD}")"
+# apply.sh runs this straight after Terraform grants the functions' service
+# accounts their Firestore and Pub/Sub roles. IAM takes a short while to
+# propagate, and until it does POST /keygen fails with a 500 (Firestore
+# "403 Missing or insufficient permissions" in the function log), returning
+# an HTML error page instead of JSON. Retry for up to a minute before
+# treating it as a real failure.
+POST_ATTEMPTS=12
+POST_SLEEP_SECONDS=5
+REQUEST_ID=""
+POST_BODY="$(mktemp)"
+trap 'rm -f "${POST_BODY}"' EXIT
 
-REQUEST_ID="$(echo "${RESPONSE}" | jq -r '.request_id // empty')"
+for ((i=1; i<=POST_ATTEMPTS; i++)); do
+  HTTP_CODE="$(curl -sS -o "${POST_BODY}" -w '%{http_code}' \
+    -X POST "${API_BASE}/keygen" \
+    -H "Content-Type: application/json" \
+    -d "${REQ_PAYLOAD}" || true)"
+  RESPONSE="$(cat "${POST_BODY}")"
+
+  REQUEST_ID="$(echo "${RESPONSE}" | jq -r '.request_id // empty' 2>/dev/null || true)"
+  [ -n "${REQUEST_ID}" ] && break
+
+  echo "NOTE: Attempt ${i}/${POST_ATTEMPTS}: POST /keygen returned HTTP ${HTTP_CODE}" \
+       "(IAM may still be propagating), retrying..."
+  sleep "${POST_SLEEP_SECONDS}"
+done
 
 if [ -z "${REQUEST_ID}" ]; then
   echo "ERROR: No request_id returned."

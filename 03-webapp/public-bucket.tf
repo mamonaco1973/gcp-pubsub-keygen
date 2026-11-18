@@ -66,6 +66,13 @@ resource "google_storage_bucket_object" "index" {
   bucket       = google_storage_bucket.static_site.name
   source       = "${path.root}/index.html"
   content_type = "text/html"
+
+  # Public GCS objects are served with "public, max-age=3600" by default, so
+  # browsers and Google's edge cache keep the old page for up to an hour
+  # after a redeploy. no-cache makes them revalidate (cheap, via the ETag) on
+  # every load. Content changes themselves are already picked up: the
+  # provider compares the file's MD5 (detect_md5hash) on every plan.
+  cache_control = "no-cache"
 }
 
 # ------------------------------------------------------------------------------

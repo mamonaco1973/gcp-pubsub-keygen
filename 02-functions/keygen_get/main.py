@@ -4,6 +4,11 @@ from google.cloud import firestore
 from flask import Request, jsonify, make_response
 
 
+# Created once per instance, not per request: building a client means a new
+# gRPC channel and an auth token fetch, which is slow on a small instance.
+db = firestore.Client()
+
+
 # ==============================================================================
 # HTTP API to retrieve SSH key generation results
 # ==============================================================================
@@ -30,7 +35,6 @@ def keygen_get(request: Request):
 
     request_id = request.path.split("/")[-1]
 
-    db = firestore.Client()
     doc = db.collection("keygen_results").document(request_id).get()
 
     if not doc.exists:

@@ -68,23 +68,25 @@ resource "google_storage_bucket" "functions_src" {
 # Upload function source archives
 # ------------------------------------------------------------------------------
 # Uploads the packaged zip files to the source bucket so they can be referenced
-# by Cloud Functions build configurations.
+# by Cloud Functions build configurations. The zip's MD5 is part of the object
+# name: with a fixed name, changed code updated the object but not the
+# function, so Cloud Functions never rebuilt it.
 # ------------------------------------------------------------------------------
 
 resource "google_storage_bucket_object" "worker_object" {
-  name   = "keygen_worker.zip"
+  name   = "keygen_worker-${data.archive_file.worker_zip.output_md5}.zip"
   bucket = google_storage_bucket.functions_src.name
   source = data.archive_file.worker_zip.output_path
 }
 
 resource "google_storage_bucket_object" "post_object" {
-  name   = "keygen_post.zip"
+  name   = "keygen_post-${data.archive_file.post_zip.output_md5}.zip"
   bucket = google_storage_bucket.functions_src.name
   source = data.archive_file.post_zip.output_path
 }
 
 resource "google_storage_bucket_object" "get_object" {
-  name   = "keygen_get.zip"
+  name   = "keygen_get-${data.archive_file.get_zip.output_md5}.zip"
   bucket = google_storage_bucket.functions_src.name
   source = data.archive_file.get_zip.output_path
 }

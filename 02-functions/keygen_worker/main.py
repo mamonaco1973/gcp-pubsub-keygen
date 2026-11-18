@@ -8,6 +8,11 @@ from cryptography.hazmat.primitives.asymmetric import rsa, ed25519
 from cryptography.hazmat.primitives import serialization
 
 
+# Created once per instance, not per request: building a client means a new
+# gRPC channel and an auth token fetch, which is slow on a small instance.
+db = firestore.Client()
+
+
 # ==============================================================================
 # Pub/Sub worker for asynchronous SSH key generation
 # ==============================================================================
@@ -31,7 +36,6 @@ def keygen_worker(event, context):
     key_type   = msg.get("key_type", "rsa")
     key_bits   = msg.get("key_bits", 2048)
 
-    db = firestore.Client()
     doc_ref = db.collection("keygen_results").document(request_id)
 
     # --------------------------------------------------------------------------

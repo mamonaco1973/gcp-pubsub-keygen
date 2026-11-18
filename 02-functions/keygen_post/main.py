@@ -7,6 +7,21 @@ from google.cloud import firestore, pubsub_v1
 
 
 # ==============================================================================
+# Shared clients
+# ==============================================================================
+# Created once per instance, not per request: building them means new gRPC
+# channels and an auth token fetch, which is slow on a small instance.
+# ==============================================================================
+
+db = firestore.Client()
+publisher = pubsub_v1.PublisherClient()
+topic = publisher.topic_path(
+    project=os.environ["GOOGLE_CLOUD_PROJECT"],
+    topic="keygen-requests",
+)
+
+
+# ==============================================================================
 # HTTP API to submit SSH key generation requests
 # ==============================================================================
 
@@ -34,18 +49,6 @@ def keygen_post(request):
     key_type   = body.get("key_type", "rsa")
     key_bits   = body.get("key_bits", 2048)
 
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
-        raise RuntimeError("Missing GOOGLE_CLOUD_PROJECT environment variable")
-
-    db = firestore.Client()
-
-    publisher = pubsub_v1.PublisherClient()
-    topic = publisher.topic_path(
-        project=project_id,
-        topic="keygen-requests",
-    )
-
     # --------------------------------------------------------------------------
     # Create initial Firestore record
     # --------------------------------------------------------------------------
@@ -61,6 +64,11 @@ def keygen_post(request):
     # --------------------------------------------------------------------------
     # Publish request to Pub/Sub
     # --------------------------------------------------------------------------
+    # Wait for the publish to finish before replying. publish() only queues
+    # the message for a background thread, and once the response is sent
+    # Cloud Functions throttles the instance's CPU, so an unawaited message
+    # reached the worker 4-10 seconds late.
+    # --------------------------------------------------------------------------
     publisher.publish(
         topic,
         json.dumps({
@@ -68,7 +76,7 @@ def keygen_post(request):
             "key_type": key_type,
             "key_bits": key_bits,
         }).encode("utf-8"),
-    )
+    ).result(timeout=30)
 
     headers = {
         "Content-Type": "application/json",

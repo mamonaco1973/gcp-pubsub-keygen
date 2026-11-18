@@ -63,10 +63,18 @@ gcloud services enable run.googleapis.com
 gcloud services enable eventarc.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
 
-# Enable TTL support so values are temporary
-
+# ------------------------------------------------------------------------------
+# Step 5: Enable the Firestore TTL policy on keygen_results.expireAt
+# ------------------------------------------------------------------------------
+# When the policy is not already active the field operation can take
+# minutes server-side (one took 6 minutes in testing), and the blocking call
+# exited non-zero while waiting on it; with stderr discarded, set -e then
+# aborted apply.sh with only "Environment check failed". --async returns as soon as the request is
+# accepted; the lab does not need TTL to be active yet, it only cleans up
+# expired result documents. Later runs complete immediately either way.
+# Only stdout is silenced so a real failure is still reported.
 gcloud firestore fields ttls update expireAt \
   --collection-group=keygen_results \
-  --enable-ttl > /dev/null 2> /dev/null
+  --enable-ttl --async > /dev/null
 
 echo "NOTE: API enablement complete."
